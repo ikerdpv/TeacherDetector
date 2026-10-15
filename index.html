@@ -145,6 +145,10 @@ mark.k-claude.k-phrase, mark.k-claude.k-strong, mark.k-claude.k-format { box-sha
 .status.err { color: var(--pen); }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 
+.keybox { display: grid; gap: 8px; margin-block: 4px 12px; }
+.keybox .status { margin: 0; font-size: 13px; }
+.keybox input[type="password"] { flex: 1 1 200px; min-width: 0; font: 14px/1.2 var(--f-mono); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 7px; padding: 10px 12px; }
+.check { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink-soft); cursor: pointer; }
 .wm { display: grid; gap: 8px; padding: 12px 14px; border: 1.5px dashed var(--pen); border-radius: 8px; }
 .wm .status { margin: 0; }
 .note { border-left: 3px solid var(--warn); padding: 4px 0 4px 14px; color: var(--ink-soft); font-size: 14px; display: grid; gap: 6px; }
@@ -244,6 +248,15 @@ mark.k-claude.k-phrase, mark.k-claude.k-strong, mark.k-claude.k-format { box-sha
         </div>
         <div id="claude-box">
           <p class="status" id="claude-intro">Claude lee el texto completo y explica qué partes suenan a IA y cuáles parecen escritas por una persona. Necesario para analizar capturas de pantalla.</p>
+          <form class="keybox" id="keybox" hidden autocomplete="off">
+            <label for="apikey" class="label">Tu API key de Anthropic</label>
+            <div class="row">
+              <input type="password" id="apikey" placeholder="sk-ant-…" spellcheck="false" autocomplete="off">
+              <button type="button" class="btn ghost" id="key-forget" hidden>Borrar clave</button>
+            </div>
+            <label class="check" for="key-remember"><input type="checkbox" id="key-remember"> Recordarla en este navegador</label>
+            <p class="status">La clave se queda en tu navegador y solo se envía a api.anthropic.com. Cada consulta se cobra en tu cuenta de Anthropic. Consíguela en console.anthropic.com.</p>
+          </form>
           <div class="row">
             <button type="button" class="btn primary" id="ask">Pedir opinión a Claude</button>
             <button type="button" class="btn" id="stop" hidden>Parar</button>
@@ -740,11 +753,107 @@ Es importante destacar que se valorará la creatividad, la claridad y el rigor d
   const sampleP = window.claude?.use ? window.claude.use("sample") : Promise.resolve(null);
   let ctl = null;
 
+  // Dentro de Claude se usa la cuenta del visitante; fuera (p. ej. GitHub Pages), su propia API key.
   sampleP.then((sample) => {
     if (sample) return;
-    $("#claude-intro").textContent = "La segunda opinión de Claude solo está disponible al abrir esta página dentro de Claude. El análisis rápido sigue funcionando.";
-    $("#ask").hidden = true;
+    $("#claude-intro").textContent = "Fuera de Claude, la segunda opinión usa tu propia API key de Anthropic. El análisis rápido funciona sin ella.";
+    $("#keybox").hidden = false;
   });
+
+  const KEY_STORE = "huella-ia:apikey";
+  const keyInput = $("#apikey"), keyRemember = $("#key-remember");
+  try {
+    const saved = localStorage.getItem(KEY_STORE);
+    if (saved) { keyInput.value = saved; keyRemember.checked = true; $("#key-forget").hidden = false; }
+  } catch (_) {}
+  function syncKeyStore() {
+    try {
+      if (keyRemember.checked && keyInput.value.trim()) localStorage.setItem(KEY_STORE, keyInput.value.trim());
+      else localStorage.removeItem(KEY_STORE);
+    } catch (_) {}
+    $("#key-forget").hidden = !keyInput.value;
+  }
+  keyInput.addEventListener("input", syncKeyStore);
+  keyRemember.addEventListener("change", syncKeyStore);
+  $("#key-forget").onclick = () => { keyInput.value = ""; keyRemember.checked = false; syncKeyStore(); keyInput.focus(); };
+  $("#keybox").addEventListener("submit", (e) => { e.preventDefault(); askClaude(); });
+
+  const QUOTES = {
+    type: "array",
+    items: {
+      type: "object",
+      properties: { cita: { type: "string" }, motivo: { type: "string" } },
+      required: ["cita", "motivo"],
+      additionalProperties: false,
+    },
+  };
+  const VERDICT_SCHEMA = {
+    type: "object",
+    properties: {
+      probabilidad: { type: "integer" },
+      veredicto: { type: "string", enum: ["probablemente_ia", "mixto_o_editado", "probablemente_humano", "no_concluyente"] },
+      resumen: { type: "string" },
+      indicios: QUOTES,
+      contraindicios: QUOTES,
+      transcripcion: { type: "string" },
+    },
+    required: ["probabilidad", "veredicto", "resumen", "indicios", "contraindicios", "transcripcion"],
+    additionalProperties: false,
+  };
+
+  function fileToBase64(file) {
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result).split(",")[1]);
+      r.onerror = () => rej({ code: "image_rejected" });
+      r.readAsDataURL(file);
+    });
+  }
+
+  // Llamada directa a la API de Anthropic desde el navegador con la clave del visitante.
+  async function askApi(prompt, image, key, signal) {
+    const content = [];
+    if (image) {
+      if (!/^image\/(jpeg|png|gif|webp)$/.test(image.type)) throw { code: "image_rejected" };
+      content.push({ type: "image", source: { type: "base64", media_type: image.type, data: await fileToBase64(image) } });
+    }
+    content.push({ type: "text", text: prompt });
+    let res;
+    try {
+      res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        signal,
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": key,
+          "anthropic-version": "2023-06-01",
+          "anthropic-beta": "server-side-fallback-2026-07-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+          model: "claude-opus-5-5",
+          max_tokens: 16000,
+          fallbacks: "default",
+          output_config: { effort: "medium", format: { type: "json_schema", schema: VERDICT_SCHEMA } },
+          messages: [{ role: "user", content }],
+        }),
+      });
+    } catch (e) {
+      throw { code: e?.name === "AbortError" ? "cancelled" : "network" };
+    }
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      const code = { 401: "bad_key", 403: "forbidden", 413: "prompt_too_large", 429: "rate_limited", 529: "overloaded" }[res.status]
+        || (res.status === 400 ? "api_400" : "upstream_error");
+      throw { code, message: data?.error?.message || "" };
+    }
+    if (data?.stop_reason === "refusal") throw { code: "refused" };
+    if (data?.stop_reason === "max_tokens") throw { code: "invalid_json" };
+    const text = (data?.content || []).filter((b) => b.type === "text").map((b) => b.text).join("");
+    try { return JSON.parse(text); } catch (_) {}
+    const a = text.indexOf("{"), b = text.lastIndexOf("}");
+    try { return JSON.parse(text.slice(a, b + 1)); } catch (_) { throw { code: "invalid_json" }; }
+  }
 
   const VERDICTS = {
     probablemente_ia: ["Probablemente IA", "bad"],
@@ -776,15 +885,21 @@ ${text.slice(0, 40000)}
   }
 
   async function askClaude() {
+    if (ctl) return;
     const sample = await sampleP;
-    if (!sample) return;
+    const key = keyInput.value.trim();
     const text = src.value;
     if (!text.trim() && !state.image) {
       setStatus("Primero pega un texto o sube un archivo.", true);
       return;
     }
+    if (!sample && !key) {
+      setStatus("Pega tu API key de Anthropic para pedir la segunda opinión.", true);
+      keyInput.focus();
+      return;
+    }
     const opts = {};
-    if (state.image) {
+    if (sample && state.image) {
       const lim = await sample.limits().catch(() => null);
       if (!lim?.images) { setStatus("Esta vista no puede enviar imágenes a Claude. Copia el texto y pégalo.", true); return; }
       opts.images = [state.image];
@@ -796,7 +911,10 @@ ${text.slice(0, 40000)}
     $("#claude-out").hidden = true;
     setStatus("Claude está leyendo el material", false, true);
     try {
-      const res = await sample.json(buildPrompt(text, state.local, !!state.image), opts);
+      const prompt = buildPrompt(text, state.local, !!state.image);
+      const res = sample
+        ? await sample.json(prompt, opts)
+        : await askApi(prompt, state.image, key, ctl.signal);
       if (!res || typeof res !== "object") throw { code: "invalid_json" };
       state.claude = res;
       const tr = typeof res.transcripcion === "string" ? res.transcripcion.trim() : "";
@@ -820,6 +938,11 @@ ${text.slice(0, 40000)}
         prompt_too_large: "El texto es demasiado largo. Pega solo la parte principal.",
         invalid_json: "La respuesta llegó incompleta. Vuelve a intentarlo.",
         refused: "Claude no ha querido analizar este contenido.",
+        bad_key: "La API key no es válida. Revísala en console.anthropic.com.",
+        forbidden: "Tu API key no tiene permiso para usar este modelo.",
+        overloaded: "Los servidores de Anthropic están saturados. Prueba dentro de un rato.",
+        network: "No se pudo conectar con la API de Anthropic. Revisa tu conexión.",
+        api_400: "La API rechazó la petición" + (e?.message ? ": " + e.message : "."),
       }[e?.code] ?? "Algo falló al consultar a Claude. Vuelve a intentarlo.";
       setStatus(msg, !!msg);
       if (["not_granted", "sampling_disabled"].includes(e?.code)) $("#ask").hidden = true;
