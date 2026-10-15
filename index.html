@@ -1,0 +1,887 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body>
+<title>Huella de IA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Caveat:wght@600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: hoja de cuaderno cuadriculado; a la izquierda el material con marcas de rotulador, a la derecha la "corrección" en boli rojo. */
+:root {
+  --paper: #f5f7fb;
+  --surface: #ffffff;
+  --grid: rgba(60, 96, 170, 0.07);
+  --ink: #1a2440;
+  --ink-soft: #56617c;
+  --line: #d8dfeb;
+  --accent: #2344c4;
+  --accent-ink: #ffffff;
+  --pen: #cf2f2a;
+  --ok: #25805a;
+  --warn: #b57a00;
+  --mk-yellow: #fff06a;
+  --mk-pink: #ffc2db;
+  --mk-blue: #cfe1ff;
+  --mk-claude: rgba(35, 68, 196, 0.16);
+  --shadow: 0 1px 0 rgba(26, 36, 64, 0.04), 0 8px 24px -12px rgba(26, 36, 64, 0.18);
+
+  --f-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --f-pen: "Caveat", "Bradley Hand", "Segoe Print", cursive;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f131c; --surface: #161c29; --grid: rgba(143, 166, 255, 0.05);
+    --ink: #e5eaf5; --ink-soft: #98a3bc; --line: #2a3246;
+    --accent: #8ea5ff; --accent-ink: #0f131c; --pen: #ff6f66; --ok: #4fc58d; --warn: #e3ad3a;
+    --mk-yellow: rgba(255, 226, 40, 0.30); --mk-pink: rgba(255, 92, 160, 0.30); --mk-blue: rgba(110, 160, 255, 0.28);
+    --mk-claude: rgba(142, 165, 255, 0.22);
+    --shadow: 0 1px 0 rgba(0,0,0,.3), 0 10px 28px -14px rgba(0,0,0,.7);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0f131c; --surface: #161c29; --grid: rgba(143, 166, 255, 0.05);
+  --ink: #e5eaf5; --ink-soft: #98a3bc; --line: #2a3246;
+  --accent: #8ea5ff; --accent-ink: #0f131c; --pen: #ff6f66; --ok: #4fc58d; --warn: #e3ad3a;
+  --mk-yellow: rgba(255, 226, 40, 0.30); --mk-pink: rgba(255, 92, 160, 0.30); --mk-blue: rgba(110, 160, 255, 0.28);
+  --mk-claude: rgba(142, 165, 255, 0.22);
+  --shadow: 0 1px 0 rgba(0,0,0,.3), 0 10px 28px -14px rgba(0,0,0,.7);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+img { max-width: 100%; }
+body {
+  margin: 0;
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 22px 22px;
+  color: var(--ink);
+  font: 16px/1.55 var(--f-body);
+}
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 28px 56px; display: grid; gap: 24px; }
+
+header.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
+.brand { display: grid; gap: 4px; }
+.brand h1 { font: 700 clamp(30px, 4.5vw, 44px)/1 var(--f-display); letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+.brand h1 .mk { background: linear-gradient(transparent 52%, var(--mk-yellow) 52%, var(--mk-yellow) 92%, transparent 92%); padding-inline: 2px; }
+.brand p { margin: 0; color: var(--ink-soft); max-width: 60ch; }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 880px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+
+.sheet { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); min-width: 0; }
+.sheet-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.sheet-body { padding: 16px; display: grid; gap: 14px; min-width: 0; }
+
+.label { font: 500 12px/1 var(--f-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); }
+.badge { font: 500 11px/1 var(--f-mono); letter-spacing: 0.06em; text-transform: uppercase; padding: 5px 7px; border-radius: 4px; border: 1px dashed var(--ink-soft); color: var(--ink-soft); }
+
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; padding: 2px; gap: 2px; }
+.seg button { font: 700 13px/1 var(--f-body); border: 0; background: transparent; color: var(--ink-soft); padding: 7px 12px; border-radius: 5px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+
+.btn { font: 700 14px/1 var(--f-body); border-radius: 7px; padding: 10px 14px; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--ink); display: inline-flex; align-items: center; gap: 8px; }
+.btn:hover { border-color: var(--ink-soft); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn:disabled { opacity: .55; cursor: default; filter: none; }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--ink-soft); padding-inline: 8px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.drop { border: 1.5px dashed var(--line); border-radius: 8px; padding: 12px 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; color: var(--ink-soft); font-size: 14px; transition: border-color .15s, background .15s; }
+.drop.over { border-color: var(--accent); background: var(--mk-claude); }
+.drop .hint { flex: 1 1 220px; min-width: 0; }
+.file-chip { display: inline-flex; align-items: center; gap: 8px; font: 500 12px/1.2 var(--f-mono); color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.thumb { max-width: 100%; max-height: 260px; border-radius: 6px; border: 1px solid var(--line); display: block; }
+
+textarea#src { width: 100%; min-height: 360px; resize: vertical; font: 15px/1.6 var(--f-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+.marked { min-height: 360px; max-height: 70vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 15px/1.75 var(--f-body); padding: 14px; border: 1px solid var(--line); border-radius: 8px; background-color: var(--surface); background-image: linear-gradient(transparent calc(1.75em - 1px), var(--grid) calc(1.75em - 1px)); background-size: 100% 1.75em; background-attachment: local; }
+@media (max-width: 880px) { .marked { min-height: 220px; max-height: 50vh; } textarea#src { min-height: 220px; } }
+.marked mark { color: inherit; border-radius: 3px; padding: 0 1px; cursor: help; }
+mark.k-phrase { background: var(--mk-yellow); }
+mark.k-strong { background: var(--mk-pink); }
+mark.k-format { background: var(--mk-blue); }
+mark.k-claude { background: transparent; box-shadow: inset 0 -2px 0 var(--accent); }
+mark.k-claude.k-phrase, mark.k-claude.k-strong, mark.k-claude.k-format { box-shadow: inset 0 -2px 0 var(--accent); }
+.empty { color: var(--ink-soft); font-style: italic; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--ink-soft); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 18px; height: 12px; border-radius: 3px; display: inline-block; }
+
+/* Panel de corrección */
+.verdict { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 18px; align-items: center; }
+.score { font: 600 64px/0.9 var(--f-pen); color: var(--pen); transform: rotate(-4deg); font-variant-numeric: tabular-nums; min-width: 2.2ch; text-align: center; }
+.score small { font-size: 26px; }
+.v-title { font: 700 22px/1.15 var(--f-display); margin: 0; text-wrap: balance; }
+.v-sub { margin: 0; color: var(--ink-soft); font-size: 14px; }
+
+.meter { position: relative; height: 10px; border-radius: 99px; background: linear-gradient(90deg, var(--ok) 0 20%, var(--warn) 20% 50%, var(--pen) 50% 100%); opacity: .9; }
+.meter i { position: absolute; top: -5px; width: 4px; height: 20px; border-radius: 2px; background: var(--ink); transform: translateX(-50%); transition: left .4s ease; box-shadow: 0 0 0 2px var(--surface); }
+.meter-scale { display: flex; justify-content: space-between; font: 500 11px/1 var(--f-mono); color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+
+.signals { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.signals li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.signals li:first-child { border-top: 0; }
+.signals .name { font-weight: 700; }
+.signals .det { grid-column: 1 / -1; color: var(--ink-soft); font-size: 14px; }
+.signals .pts { font: 500 13px/1.6 var(--f-mono); color: var(--pen); font-variant-numeric: tabular-nums; }
+.signals .pts.zero { color: var(--ink-soft); }
+
+.pill { display: inline-block; font: 700 12px/1 var(--f-body); padding: 5px 9px; border-radius: 99px; border: 1.5px solid currentColor; }
+.pill.ok { color: var(--ok); } .pill.warn { color: var(--warn); } .pill.bad { color: var(--pen); } .pill.neutral { color: var(--ink-soft); }
+
+.claude-out { display: grid; gap: 12px; }
+.claude-out h4 { margin: 0; font: 700 13px/1.2 var(--f-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); }
+.quotes { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.quotes li { display: grid; gap: 2px; }
+.quotes q { font-style: italic; quotes: "«" "»"; }
+.quotes .why { color: var(--ink-soft); font-size: 14px; }
+.status { font-size: 14px; color: var(--ink-soft); }
+.status.err { color: var(--pen); }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+
+.wm { display: grid; gap: 8px; padding: 12px 14px; border: 1.5px dashed var(--pen); border-radius: 8px; }
+.wm .status { margin: 0; }
+.note { border-left: 3px solid var(--warn); padding: 4px 0 4px 14px; color: var(--ink-soft); font-size: 14px; display: grid; gap: 6px; }
+.note strong { color: var(--ink); }
+.note p { margin: 0; }
+
+.dots::after { content: ""; animation: dots 1.2s steps(4, end) infinite; }
+@keyframes dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
+@media (prefers-reduced-motion: reduce) { .meter i { transition: none; } .dots::after { animation: none; content: "..."; } }
+
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>Huella de <span class="mk">IA</span></h1>
+      <p>Pega o sube la tarea que ha colgado tu profe y mira cuántas señales típicas de texto generado con IA tiene.</p>
+    </div>
+  </header>
+
+  <div class="grid">
+    <!-- Material -->
+    <section class="sheet" aria-labelledby="mat-title">
+      <div class="sheet-head">
+        <div class="row">
+          <span class="label" id="mat-title">El material</span>
+          <span class="badge" id="example-badge">Ejemplo</span>
+        </div>
+        <div class="seg" role="group" aria-label="Vista">
+          <button type="button" id="view-marked" aria-pressed="true">Marcas</button>
+          <button type="button" id="view-edit" aria-pressed="false">Editar</button>
+        </div>
+      </div>
+      <div class="sheet-body">
+        <div class="drop" id="drop">
+          <button type="button" class="btn" id="pick">Subir archivo</button>
+          <span class="hint">o arrástralo aquí · PDF, Word (.docx), texto o captura de pantalla</span>
+          <input type="file" id="file" class="sr-only" accept=".pdf,.docx,.txt,.md,.html,.htm,image/png,image/jpeg,image/webp,image/gif">
+        </div>
+        <div id="file-info" class="row" hidden></div>
+
+        <div id="pane-marked">
+          <div class="marked" id="marked" tabindex="0" aria-label="Texto con las señales marcadas"></div>
+        </div>
+        <div id="pane-edit" hidden>
+          <label for="src" class="sr-only">Texto de la tarea</label>
+          <textarea id="src" spellcheck="false" placeholder="Pega aquí el enunciado, los apuntes o el examen que ha subido el profesor…"></textarea>
+        </div>
+
+        <div class="legend" aria-label="Leyenda">
+          <span><i class="sw" style="background:var(--mk-yellow)"></i>Frase típica de IA</span>
+          <span><i class="sw" style="background:var(--mk-pink)"></i>Resto de chat copiado</span>
+          <span><i class="sw" style="background:var(--mk-blue)"></i>Formato de chatbot</span>
+          <span><i class="sw" style="box-shadow:inset 0 -2px 0 var(--accent)"></i>Señalado por Claude</span>
+        </div>
+        <div class="row">
+          <button type="button" class="btn ghost" id="clear">Vaciar</button>
+          <button type="button" class="btn ghost" id="load-example">Cargar ejemplo</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Corrección -->
+    <aside class="sheet" aria-labelledby="res-title">
+      <div class="sheet-head">
+        <span class="label" id="res-title">Resultado</span>
+        <span class="label" id="wordcount"></span>
+      </div>
+      <div class="sheet-body">
+        <div class="verdict">
+          <div class="score" id="score" aria-hidden="true">–</div>
+          <div>
+            <p class="v-title" id="v-title">Pega un texto para empezar</p>
+            <p class="v-sub" id="v-sub">Análisis rápido hecho en tu navegador.</p>
+          </div>
+        </div>
+        <div>
+          <div class="meter" role="img" id="meter" aria-label="Nivel de señales"><i id="needle" style="left:0%"></i></div>
+          <div class="meter-scale"><span>0</span><span>20</span><span>50</span><span>100</span></div>
+        </div>
+        <ul class="signals" id="signals"></ul>
+        <div class="wm" id="wm" hidden>
+          <span class="label">Marca de agua</span>
+          <p class="status" id="wm-text"></p>
+          <div class="row">
+            <button type="button" class="btn primary" id="wm-btn" hidden>Descargar PDF con «IA generated»</button>
+          </div>
+          <p class="status" id="wm-status" aria-live="polite"></p>
+        </div>
+      </div>
+
+      <div class="sheet-body" style="border-top:1px solid var(--line)">
+        <div class="row" style="justify-content:space-between">
+          <span class="label">Segunda opinión de Claude</span>
+          <span id="claude-pill"></span>
+        </div>
+        <div id="claude-box">
+          <p class="status" id="claude-intro">Claude lee el texto completo y explica qué partes suenan a IA y cuáles parecen escritas por una persona. Necesario para analizar capturas de pantalla.</p>
+          <div class="row">
+            <button type="button" class="btn primary" id="ask">Pedir opinión a Claude</button>
+            <button type="button" class="btn" id="stop" hidden>Parar</button>
+          </div>
+          <p class="status" id="claude-status" aria-live="polite"></p>
+          <div class="claude-out" id="claude-out" hidden></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="note">
+    <p><strong>Cómo leer el resultado.</strong> Ningún detector de IA es fiable al 100%. Los enunciados escolares ya suelen ser formulaicos (objetivos, instrucciones, criterios), así que un texto humano puede dar señales y uno generado con IA y bien editado puede no darlas.</p>
+    <p>Úsalo como pista, no como prueba. Si tienes dudas, lo más útil es preguntarlo con respeto en clase. Que un profesor use IA para preparar material no es necesariamente algo malo.</p>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const EXAMPLE = `**Tarea: El ciclo del agua y su impacto en nuestro entorno** 🌍
+
+En el mundo actual, comprender el ciclo del agua es fundamental para fomentar una conciencia ambiental sólida. A continuación, te invitamos a sumergirte en este fascinante proceso que desempeña un papel crucial en la vida del planeta.
+
+### Objetivos de la actividad
+- **Comprender:** Identificar las fases principales del ciclo del agua — evaporación, condensación, precipitación y escorrentía.
+- **Analizar:** Reflexionar sobre cómo la actividad humana influye en este proceso.
+- **Aplicar:** Desarrollar el pensamiento crítico a través de ejemplos de tu entorno.
+
+### Instrucciones
+1. **Investigación:** Busca información en al menos dos fuentes fiables.
+2. **Elaboración:** Crea un esquema visual que represente cada fase del ciclo.
+3. **Reflexión:** Redacta un texto de 200 palabras en el que expliques no solo el proceso, sino también su importancia para tu comunidad.
+
+Es importante destacar que se valorará la creatividad, la claridad y el rigor de la información. Recuerda que no se trata solo de memorizar, sino de comprender el impacto real del agua en nuestra vida diaria.
+
+¡Mucho éxito y manos a la obra! 💧`;
+
+  // ---------- Reglas del análisis local ----------
+  const B = (src) => new RegExp("(?<![\\p{L}\\p{N}])(?:" + src + ")(?![\\p{L}\\p{N}])", "giu");
+
+  // Restos casi inequívocos de haber copiado una respuesta de chat.
+  const STRONG = [
+    { re: /oaicite|contentReference\[|turn\d+(?:search|news|view|file)\d+|utm_source=(?:chatgpt\.com|openai)/giu, why: "Restos de citas o enlaces copiados de ChatGPT", w: 45 },
+    { re: B("como (?:un )?modelo de lenguaje|soy una (?:inteligencia artificial|IA)|as an AI language model"), why: "La IA habla de sí misma", w: 45 },
+    { re: B("(?:¡?claro|por supuesto|¡?perfecto|¡?genial)[!,.]?\\s+aqu[ií] (?:tienes|te dejo)|aqu[ií] (?:tienes|te dejo) (?:una|un|la|el|tu|las|los)|here(?:'s| is) (?:a|an|the) (?:revised|draft|version)"), why: "Frase de entrada típica de chatbot («Aquí tienes…»)", w: 30 },
+    { re: B("espero que (?:esto |te )*sea (?:útil|de ayuda)|si (?:quieres|lo deseas|necesitas),? (?:también )?(?:puedo|te puedo)|¿(?:quieres|te gustaría) que (?:te )?(?:prepare|haga|añada|adapte|cree|elabore)|let me know if|i hope this helps|would you like me to"), why: "Frase de cierre típica de chatbot", w: 30 },
+    { re: /\[(?:insertar|insert|nombre|fecha|tu nombre|nombre del|asignatura|curso|centro)[^\]\n]{0,40}\]/giu, why: "Hueco de plantilla sin rellenar", w: 25 },
+  ];
+
+  // Expresiones que los modelos usan mucho más que una persona.
+  const PHRASES = [
+    ["es importante (?:destacar|señalar|tener en cuenta|recordar|mencionar)", "«Es importante destacar…»"],
+    ["cabe (?:destacar|señalar|mencionar|resaltar)", "«Cabe destacar…»"],
+    ["en conclusión|en resumen|en definitiva", "Cierre de redacción («En conclusión…»)"],
+    ["en el mundo (?:actual|de hoy|moderno)|en la sociedad actual", "«En el mundo actual…»"],
+    ["(?:juega|juegan|desempeña|desempeñan) un papel (?:crucial|fundamental|clave|esencial|vital|importante)", "«Desempeña un papel crucial»"],
+    ["un (?:aspecto|elemento|factor|pilar) (?:clave|fundamental|crucial|esencial)", "«Un aspecto clave»"],
+    ["fomentar|fomenta|fomentando|potenciar|potenciando", "Verbos favoritos de la IA (fomentar, potenciar)"],
+    ["sumergirte|sumérgete|sumergirnos|adentrarnos|adéntrate|adentrarte|embarcarte|embárcate", "«Sumérgete / adéntrate en…»"],
+    ["a continuación", "«A continuación…»"],
+    ["fascinante|apasionante|vibrante|enriquecedor(?:a)?|tapiz|en constante evolución", "Adjetivos inflados (fascinante, enriquecedor…)"],
+    ["crucial|cruciales", "«Crucial»"],
+    ["pensamiento crítico", "«Pensamiento crítico»"],
+    ["de (?:manera|forma) (?:efectiva|significativa|integral|eficaz|clara y concisa)", "«De manera efectiva/significativa»"],
+    ["¡?manos a la obra!?|¡mucho éxito!?|¡buena suerte!?|¡ánimo!?|¡a por ello!?", "Despedida animosa («¡Manos a la obra!»)"],
+    ["no dudes en|asegúrate de", "«No dudes en / asegúrate de…»"],
+    ["delve|delves|tapestry|it'?s important to note|in conclusion|in today'?s (?:world|fast-paced)|plays? a (?:crucial|pivotal|vital) role|foster(?:ing)?|ever-evolving|seamless(?:ly)?|leverag(?:e|ing)", "Expresión típica de IA en inglés"],
+  ].map(([src, label]) => ({ re: B(src), label }));
+
+  const NOT_ONLY = B("no (?:solo|sólo|solamente|únicamente) .{1,90}?,? sino|not (?:only|just) .{1,90}? but");
+  const BOLD = /\*\*[^*\n]{1,90}\*\*/gu;
+  const HEADING = /^[ \t]*#{1,6}[ \t]+\S.*$/gmu;
+  const EMOJI = /\p{Extended_Pictographic}️?/gu;
+  const EMDASH = /(?<!^[ \t]*)—/gmu;
+  const LABEL_LINE = /^[ \t]*(?:[-*•–]|\d+[.)])?[ \t]*(?:\*\*)?[\p{Lu}][^:\n*]{1,40}?(?:\*\*)?:(?:\*\*)?[ \t]+\S/gmu;
+
+  function allMatches(re, text) {
+    re.lastIndex = 0;
+    const out = [];
+    let m;
+    while ((m = re.exec(text))) {
+      if (m[0].length === 0) { re.lastIndex++; continue; }
+      out.push({ start: m.index, end: m.index + m[0].length, str: m[0] });
+    }
+    return out;
+  }
+
+  function wordsOf(t) { return (t.match(/[\p{L}\p{N}]+(?:['’][\p{L}]+)?/gu) || []).length; }
+
+  function analyze(text) {
+    const words = wordsOf(text);
+    const per100 = (n) => words ? (n / words) * 100 : 0;
+    const signals = [];
+    const ranges = [];
+
+    // 1. Restos de chat
+    let strongPts = 0;
+    for (const s of STRONG) {
+      const ms = allMatches(s.re, text);
+      if (!ms.length) continue;
+      strongPts += s.w;
+      ms.forEach((m) => ranges.push({ ...m, kind: "strong", why: s.why }));
+      signals.push({ name: s.why, det: ejemplos(ms), pts: s.w });
+    }
+
+    // 2. Frases típicas
+    let phraseHits = 0;
+    const phraseLabels = new Map();
+    for (const p of PHRASES) {
+      const ms = allMatches(p.re, text);
+      if (!ms.length) continue;
+      phraseHits += ms.length;
+      phraseLabels.set(p.label, (phraseLabels.get(p.label) || 0) + ms.length);
+      ms.forEach((m) => ranges.push({ ...m, kind: "phrase", why: p.label }));
+    }
+    const notOnly = allMatches(NOT_ONLY, text);
+    notOnly.forEach((m) => ranges.push({ ...m, kind: "phrase", why: "Estructura «no solo…, sino…»" }));
+    if (phraseHits) {
+      const pts = Math.min(34, Math.round(per100(phraseHits) * 12));
+      const top = [...phraseLabels.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([l, n]) => n > 1 ? `${l} ×${n}` : l);
+      signals.push({ name: `${phraseHits} expresiones típicas de IA`, det: top.join(" · "), pts: Math.max(pts, 3) });
+    }
+    if (notOnly.length) signals.push({ name: "Estructura «no solo…, sino también…»", det: `${notOnly.length} vez/veces. A los modelos les encanta este contraste.`, pts: Math.min(8, notOnly.length * 4) });
+
+    // 3. Formato de chatbot
+    const bold = allMatches(BOLD, text), heads = allMatches(HEADING, text);
+    const md = bold.length + heads.length;
+    bold.forEach((m) => ranges.push({ ...m, kind: "format", why: "Negrita en formato Markdown (**…**)" }));
+    heads.forEach((m) => ranges.push({ ...m, kind: "format", why: "Título en formato Markdown (###)" }));
+    if (md) signals.push({ name: "Restos de formato Markdown", det: `${bold.length} negritas con ** y ${heads.length} títulos con #. Aparecen al copiar directamente de un chat.`, pts: Math.min(14, 4 + md * 2) });
+
+    const emojis = allMatches(EMOJI, text);
+    emojis.forEach((m) => ranges.push({ ...m, kind: "format", why: "Emoji decorativo" }));
+    if (emojis.length) signals.push({ name: "Emojis decorativos", det: `${emojis.length} emoji${emojis.length > 1 ? "s" : ""} como adorno de títulos o listas.`, pts: Math.min(10, emojis.length * 3) });
+
+    const dashes = allMatches(EMDASH, text);
+    dashes.forEach((m) => ranges.push({ ...m, kind: "format", why: "Raya (—) en mitad de frase" }));
+    if (dashes.length) {
+      const perK = per100(dashes.length) * 10;
+      signals.push({ name: "Rayas largas (—) en mitad de frase", det: `${dashes.length}. En español escolar casi nadie las teclea; ChatGPT las usa muchísimo.`, pts: Math.min(10, Math.max(3, Math.round(perK * 1.5))) });
+    }
+
+    const labels = allMatches(LABEL_LINE, text).length;
+    if (labels >= 3) signals.push({ name: "Listas «Etiqueta: explicación»", det: `${labels} líneas que empiezan con una palabra en negrita y dos puntos.`, pts: Math.min(10, (labels - 2) * 2) });
+
+    // 4. Ritmo uniforme (poca variación en la longitud de las frases)
+    // Los saltos de línea simples (p. ej. de un PDF) no cortan frase; los de párrafo y lista sí.
+    const sentences = text.replace(/\*\*|#+ /g, "")
+      .replace(/([^\n])\n(?![ \t]*(?:\n|[-*•–]|\d+[.)]))/g, "$1 ")
+      .split(/(?<=[.!?…])\s+|\n+/u).map(wordsOf).filter((n) => n >= 4);
+    let rhythm = null;
+    if (sentences.length >= 8 && words >= 120) {
+      const mean = sentences.reduce((a, b) => a + b, 0) / sentences.length;
+      const sd = Math.sqrt(sentences.reduce((a, b) => a + (b - mean) ** 2, 0) / sentences.length);
+      const cv = sd / mean;
+      rhythm = cv;
+      const pts = Math.round(Math.max(0, Math.min(12, ((0.6 - cv) / 0.3) * 12)));
+      signals.push({ name: "Ritmo de las frases", det: pts ? `Frases muy parecidas en longitud (variación ${cv.toFixed(2)}). Las personas alternan frases cortas y largas.` : `Longitud de frases variada (variación ${cv.toFixed(2)}), algo más propio de una persona.`, pts });
+    }
+
+    const score = Math.min(100, signals.reduce((a, s) => a + s.pts, 0));
+    signals.sort((a, b) => b.pts - a.pts);
+    return { words, score, signals, ranges, rhythm };
+  }
+
+  function ejemplos(ms) {
+    const uniq = [...new Set(ms.map((m) => m.str.trim()))].slice(0, 2);
+    return uniq.map((s) => `«${s.length > 60 ? s.slice(0, 57) + "…" : s}»`).join(" · ");
+  }
+
+  // ---------- Estado y DOM ----------
+  const $ = (s) => document.querySelector(s);
+  const src = $("#src"), marked = $("#marked");
+  const state = { local: null, claude: null, image: null, pdf: null, isExample: true };
+
+  function setView(v) {
+    const edit = v === "edit";
+    $("#pane-edit").hidden = !edit;
+    $("#pane-marked").hidden = edit;
+    $("#view-edit").setAttribute("aria-pressed", String(edit));
+    $("#view-marked").setAttribute("aria-pressed", String(!edit));
+    if (edit) src.focus();
+  }
+  $("#view-edit").onclick = () => setView("edit");
+  $("#view-marked").onclick = () => setView("marked");
+
+  function claudeRanges(text) {
+    const out = [];
+    for (const q of state.claude?.indicios || []) {
+      const cita = String(q.cita || "").trim();
+      if (cita.length < 4) continue;
+      const i = text.indexOf(cita);
+      if (i >= 0) out.push({ start: i, end: i + cita.length, kind: "claude", why: "Claude: " + String(q.motivo || "") });
+    }
+    return out;
+  }
+
+  function renderMarked(text, ranges) {
+    marked.replaceChildren();
+    if (!text.trim()) {
+      const p = document.createElement("span");
+      p.className = "empty";
+      p.textContent = state.image ? "Has subido una imagen. Pide la opinión de Claude para que la lea y la analice." : "Aquí verás el texto con las señales marcadas. Sube un archivo o pulsa «Editar» para pegarlo.";
+      marked.append(p);
+      return;
+    }
+    // Cortes en todos los bordes; cada tramo lleva las clases de los rangos que lo cubren.
+    const cuts = new Set([0, text.length]);
+    ranges.forEach((r) => { cuts.add(r.start); cuts.add(r.end); });
+    const pts = [...cuts].sort((a, b) => a - b);
+    const frag = document.createDocumentFragment();
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      const seg = text.slice(a, b);
+      const cover = ranges.filter((r) => r.start <= a && r.end >= b);
+      if (!cover.length) { frag.append(seg); continue; }
+      const m = document.createElement("mark");
+      const kinds = new Set(cover.map((r) => r.kind));
+      // Un único color de fondo: restos de chat > frase > formato
+      const bg = ["strong", "phrase", "format"].find((k) => kinds.has(k));
+      if (bg) m.classList.add("k-" + bg);
+      if (kinds.has("claude")) m.classList.add("k-claude");
+      m.title = [...new Set(cover.map((r) => r.why))].join("\n");
+      m.textContent = seg;
+      frag.append(m);
+    }
+    marked.append(frag);
+  }
+
+  function levelOf(score) {
+    if (score >= 50) return { cls: "bad", title: "Muchas señales de IA", sub: "El texto acumula rasgos muy típicos de un chatbot." };
+    if (score >= 20) return { cls: "warn", title: "Algunas señales de IA", sub: "Hay rasgos sospechosos, pero también podrían ser costumbres del profe." };
+    return { cls: "ok", title: "Pocas señales de IA", sub: "No aparecen los rasgos habituales de texto generado." };
+  }
+
+  function render() {
+    const text = src.value;
+    const r = analyze(text);
+    state.local = r;
+    renderMarked(text, r.ranges.concat(claudeRanges(text)));
+    renderWatermark();
+    $("#example-badge").hidden = !state.isExample;
+    $("#wordcount").textContent = r.words ? `${r.words} palabras` : "";
+
+    const score = $("#score"), list = $("#signals");
+    list.replaceChildren();
+    if (!r.words) {
+      score.textContent = "–";
+      $("#v-title").textContent = state.image ? "Imagen cargada" : "Pega un texto para empezar";
+      $("#v-sub").textContent = state.image ? "El análisis rápido solo funciona con texto. Pide la opinión de Claude." : "Análisis rápido hecho en tu navegador.";
+      $("#needle").style.left = "0%";
+      $("#meter").setAttribute("aria-label", "Sin datos");
+      return;
+    }
+    const lv = levelOf(r.score);
+    score.innerHTML = `${r.score}<small>/100</small>`;
+    score.setAttribute("aria-hidden", "true");
+    $("#v-title").textContent = lv.title;
+    $("#v-sub").textContent = r.words < 80 ? "Texto muy corto: el resultado es poco fiable." : lv.sub + " Es una puntuación de señales, no una probabilidad.";
+    $("#needle").style.left = r.score + "%";
+    $("#meter").setAttribute("aria-label", `Puntuación de señales: ${r.score} de 100`);
+
+    if (!r.signals.length) {
+      const li = document.createElement("li");
+      li.innerHTML = `<span class="name">Sin señales destacables</span><span class="pts zero">+0</span><span class="det"></span>`;
+      li.querySelector(".det").textContent = "No hay frases típicas, restos de chat ni formato de chatbot.";
+      list.append(li);
+    }
+    for (const s of r.signals) {
+      const li = document.createElement("li");
+      const n = document.createElement("span"); n.className = "name"; n.textContent = s.name;
+      const p = document.createElement("span"); p.className = "pts" + (s.pts ? "" : " zero"); p.textContent = "+" + s.pts;
+      const d = document.createElement("span"); d.className = "det"; d.textContent = s.det;
+      li.append(n, p, d);
+      list.append(li);
+    }
+  }
+
+  let t;
+  src.addEventListener("input", () => {
+    state.isExample = false;
+    state.claude = null; renderClaude();
+    clearTimeout(t); t = setTimeout(render, 250);
+  });
+
+  function setText(text, { example = false } = {}) {
+    src.value = text;
+    state.isExample = example;
+    state.claude = null;
+    renderClaude();
+    render();
+  }
+
+  $("#clear").onclick = () => { clearFile(); setText(""); setView("edit"); };
+  $("#load-example").onclick = () => { clearFile(); setText(EXAMPLE, { example: true }); setView("marked"); };
+
+  // ---------- Archivos ----------
+  const PDFJS = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+  const PDFJS_WORKER = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  const MAMMOTH = "https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js";
+  const loaded = {};
+  function loadScript(url) {
+    return loaded[url] ||= new Promise((res, rej) => {
+      const s = document.createElement("script");
+      s.src = url; s.onload = res;
+      s.onerror = () => { delete loaded[url]; rej(new Error("No se pudo cargar el lector de archivos.")); };
+      document.head.append(s);
+    });
+  }
+
+  async function readPdf(file) {
+    // Con el worker cargado como script normal, pdf.js lo ejecuta en la página (sin Web Worker).
+    await loadScript(PDFJS_WORKER);
+    await loadScript(PDFJS);
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+    const buf = await file.arrayBuffer();
+    // Copia del original para la marca de agua (pdf.js puede quedarse con el buffer).
+    state.pdf = { bytes: buf.slice(0), name: file.name };
+    const pdf = await window.pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+    const pages = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const c = await (await pdf.getPage(i)).getTextContent();
+      let s = "";
+      for (const it of c.items) { s += it.str; if (it.hasEOL) s += "\n"; }
+      pages.push(s.trim());
+    }
+    return pages.join("\n\n");
+  }
+
+  async function readDocx(file) {
+    await loadScript(MAMMOTH);
+    const r = await window.mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
+    return r.value.replace(/\n{3,}/g, "\n\n");
+  }
+
+  function showFileInfo(file, extra) {
+    const box = $("#file-info");
+    box.replaceChildren();
+    const chip = document.createElement("span");
+    chip.className = "file-chip";
+    chip.textContent = file.name + (extra ? " · " + extra : "");
+    const x = document.createElement("button");
+    x.type = "button"; x.className = "btn ghost"; x.textContent = "Quitar";
+    x.onclick = () => { clearFile(); render(); };
+    box.append(chip, x);
+    if (state.image) {
+      const img = document.createElement("img");
+      img.className = "thumb"; img.alt = "Captura subida";
+      img.src = URL.createObjectURL(state.image);
+      const wrap = document.createElement("div"); wrap.style.flexBasis = "100%"; wrap.append(img);
+      box.append(wrap);
+    }
+    box.hidden = false;
+  }
+  function clearFile() {
+    state.image = null;
+    state.pdf = null;
+    $("#file-info").hidden = true;
+    $("#file-info").replaceChildren();
+    $("#file").value = "";
+  }
+
+  async function handleFile(file) {
+    if (!file) return;
+    const name = file.name.toLowerCase();
+    clearFile();
+    const box = $("#file-info");
+    box.hidden = false;
+    box.innerHTML = `<span class="status dots">Leyendo ${escapeHtml(file.name)}</span>`;
+    try {
+      if (file.type.startsWith("image/")) {
+        state.image = file;
+        setText("");
+        showFileInfo(file, "imagen");
+        setView("marked");
+        return;
+      }
+      let text;
+      if (name.endsWith(".pdf") || file.type === "application/pdf") text = await readPdf(file);
+      else if (name.endsWith(".docx")) text = await readDocx(file);
+      else if (name.endsWith(".doc")) throw new Error("Los .doc antiguos no se pueden leer. Guárdalo como .docx o PDF.");
+      else {
+        text = await file.text();
+        if (/\.html?$/.test(name)) text = new DOMParser().parseFromString(text, "text/html").body.innerText;
+      }
+      if (!text.trim()) throw new Error("No se encontró texto. Si es un PDF escaneado, sube una captura de pantalla y pide la opinión de Claude.");
+      setText(text);
+      showFileInfo(file, `${wordsOf(text)} palabras`);
+      setView("marked");
+    } catch (e) {
+      state.pdf = null;
+      box.innerHTML = "";
+      const p = document.createElement("span");
+      p.className = "status err";
+      p.textContent = e.message || "No se pudo leer el archivo.";
+      box.append(p);
+    }
+  }
+
+  function escapeHtml(s) { return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+  $("#pick").onclick = () => $("#file").click();
+  $("#file").onchange = (e) => handleFile(e.target.files[0]);
+  const drop = $("#drop");
+  ["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+  drop.addEventListener("drop", (e) => handleFile(e.dataTransfer.files[0]));
+  document.addEventListener("paste", (e) => {
+    const img = [...(e.clipboardData?.files || [])].find((f) => f.type.startsWith("image/"));
+    if (img && document.activeElement !== src) { e.preventDefault(); handleFile(img); }
+  });
+
+  // ---------- Marca de agua en el PDF ----------
+  const PDFLIB = "https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js";
+
+  // Si Claude ya ha opinado, manda su veredicto; si no, la puntuación local.
+  function aiDetected() {
+    const c = state.claude;
+    if (c) return c.veredicto === "probablemente_ia" || Number(c.probabilidad) >= 60;
+    return !!state.local?.words && state.local.score >= 50;
+  }
+
+  function evidenceLine() {
+    const c = state.claude;
+    const how = c
+      ? `Claude estima un ${Math.round(Number(c.probabilidad) || 0)}% de probabilidad de IA`
+      : `puntuación de señales ${state.local?.score ?? 0}/100`;
+    return `Marcado con Huella de IA · ${how} · Es un indicio, no una prueba.`;
+  }
+
+  function renderWatermark() {
+    const box = $("#wm");
+    const det = aiDetected();
+    box.hidden = !det;
+    if (!det) return;
+    $("#wm-btn").hidden = !state.pdf;
+    $("#wm-text").textContent = state.pdf
+      ? `Se ha detectado IA. Descarga «${state.pdf.name}» con la marca de agua «IA generated» en cada página.`
+      : "Se ha detectado IA. Sube el PDF original para descargarlo con la marca de agua «IA generated».";
+  }
+
+  async function watermarkPdf(bytes, footer) {
+    await loadScript(PDFLIB);
+    const { PDFDocument, StandardFonts, rgb, degrees } = window.PDFLib;
+    const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
+    const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+    const reg = await doc.embedFont(StandardFonts.Helvetica);
+    const red = rgb(0.81, 0.18, 0.16);
+    const label = "IA generated";
+    for (const page of doc.getPages()) {
+      const { width: w, height: h } = page.getSize();
+      const ang = Math.atan2(h, w);
+      // El texto ocupa el 60% de la diagonal y queda centrado en la página.
+      const size = (Math.hypot(w, h) * 0.6) / bold.widthOfTextAtSize(label, 1);
+      const tw = bold.widthOfTextAtSize(label, size), th = size * 0.7;
+      const x = w / 2 - (tw / 2) * Math.cos(ang) + (th / 2) * Math.sin(ang);
+      const y = h / 2 - (tw / 2) * Math.sin(ang) - (th / 2) * Math.cos(ang);
+      page.drawText(label, { x, y, size, font: bold, color: red, opacity: 0.22, rotate: degrees((ang * 180) / Math.PI) });
+      page.drawText(footer, { x: 24, y: 14, size: 8, font: reg, color: red, opacity: 0.85 });
+    }
+    return doc.save();
+  }
+
+  async function saveFile(name, bytes) {
+    const dl = window.claude?.use ? await window.claude.use("downloads") : null;
+    if (dl) return dl.save({ filename: name, data: bytes });
+    const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = name;
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+
+  $("#wm-btn").onclick = async () => {
+    if (!state.pdf) return;
+    const btn = $("#wm-btn"), st = $("#wm-status");
+    btn.disabled = true;
+    st.className = "status dots"; st.textContent = "Añadiendo la marca de agua";
+    try {
+      const out = await watermarkPdf(state.pdf.bytes.slice(0), evidenceLine());
+      await saveFile(state.pdf.name.replace(/\.pdf$/i, "") + " - IA generated.pdf", out);
+      st.className = "status"; st.textContent = "PDF con marca de agua listo.";
+    } catch (e) {
+      st.className = "status err";
+      st.textContent = e?.code ? "No se ha descargado el PDF." : "No se pudo añadir la marca de agua a este PDF (puede estar protegido o dañado).";
+    } finally {
+      btn.disabled = false;
+    }
+  };
+
+  // ---------- Segunda opinión de Claude ----------
+  const sampleP = window.claude?.use ? window.claude.use("sample") : Promise.resolve(null);
+  let ctl = null;
+
+  sampleP.then((sample) => {
+    if (sample) return;
+    $("#claude-intro").textContent = "La segunda opinión de Claude solo está disponible al abrir esta página dentro de Claude. El análisis rápido sigue funcionando.";
+    $("#ask").hidden = true;
+  });
+
+  const VERDICTS = {
+    probablemente_ia: ["Probablemente IA", "bad"],
+    mixto_o_editado: ["Mezcla o IA editada", "warn"],
+    probablemente_humano: ["Probablemente humano", "ok"],
+    no_concluyente: ["No concluyente", "neutral"],
+  };
+
+  function buildPrompt(text, local, hasImage) {
+    const resumen = local && local.words
+      ? local.signals.map((s) => `- ${s.name} (+${s.pts}): ${s.det}`).join("\n") || "- Ninguna"
+      : "- No disponible";
+    return `Ayudas a estudiantes a valorar si un material docente (enunciado de tarea, apuntes, examen o rúbrica) que ha publicado su profesor parece generado con IA (ChatGPT, Gemini, Copilot, Claude…).
+
+Responde SOLO con un objeto JSON con esta forma exacta:
+{"probabilidad": 0-100, "veredicto": "probablemente_ia" | "mixto_o_editado" | "probablemente_humano" | "no_concluyente", "resumen": "2 o 3 frases en español, tono neutral", "indicios": [{"cita": "fragmento literal y corto del material", "motivo": "por qué apunta a IA"}], "contraindicios": [{"cita": "fragmento literal y corto", "motivo": "por qué apunta a autoría humana"}], "transcripcion": "${hasImage ? "el texto completo que aparece en la imagen, tal cual" : ""}"}
+
+Qué apunta a IA: frases hechas de chatbot ("es importante destacar", "desempeña un papel crucial", "sumérgete"), restos de conversación ("Aquí tienes…", "¿Quieres que…?"), Markdown copiado (**, ###), emojis decorativos, rayas largas (—), listas "Etiqueta: explicación", tono entusiasta y genérico, ritmo muy uniforme, contenido que podría servir para cualquier clase.
+Qué apunta a una persona: erratas o faltas, referencias concretas al grupo, fechas, el centro, la plataforma o temas vistos en clase, estilo irregular, giros personales, formato heredado de plantillas del centro.
+Sé prudente: ningún detector es fiable al 100% y los enunciados escolares ya son formulaicos. Si el texto es corto, neutro o ambiguo, usa "no_concluyente" o una probabilidad moderada. Como mucho 5 indicios y 3 contraindicios. Las citas deben copiarse literalmente del material.
+
+Señales que ha encontrado un análisis automático (orientativas, pueden fallar):
+${resumen}
+
+MATERIAL${hasImage ? " (la imagen adjunta" + (text.trim() ? " y este texto" : "") + ")" : ""}:
+"""
+${text.slice(0, 40000)}
+"""`;
+  }
+
+  async function askClaude() {
+    const sample = await sampleP;
+    if (!sample) return;
+    const text = src.value;
+    if (!text.trim() && !state.image) {
+      setStatus("Primero pega un texto o sube un archivo.", true);
+      return;
+    }
+    const opts = {};
+    if (state.image) {
+      const lim = await sample.limits().catch(() => null);
+      if (!lim?.images) { setStatus("Esta vista no puede enviar imágenes a Claude. Copia el texto y pégalo.", true); return; }
+      opts.images = [state.image];
+    }
+    ctl = new AbortController();
+    opts.signal = ctl.signal;
+    $("#ask").disabled = true;
+    $("#stop").hidden = false;
+    $("#claude-out").hidden = true;
+    setStatus("Claude está leyendo el material", false, true);
+    try {
+      const res = await sample.json(buildPrompt(text, state.local, !!state.image), opts);
+      if (!res || typeof res !== "object") throw { code: "invalid_json" };
+      state.claude = res;
+      const tr = typeof res.transcripcion === "string" ? res.transcripcion.trim() : "";
+      if (state.image && tr && !text.trim()) {
+        src.value = tr;
+        state.isExample = false;
+      } else {
+        state.isExample = state.isExample && text === EXAMPLE;
+      }
+      setStatus("");
+      render();
+      renderClaude();
+    } catch (e) {
+      const msg = {
+        cancelled: "",
+        not_granted: "No se ha dado permiso para usar Claude en esta página.",
+        sampling_disabled: "Claude no está disponible en esta cuenta.",
+        rate_limited: "Demasiadas consultas seguidas o límite de uso alcanzado. Prueba dentro de un rato.",
+        session_expired: "Tu sesión ha caducado. Vuelve a iniciar sesión en Claude.",
+        image_rejected: "No se pudo usar esa imagen. Prueba con otra captura (JPG o PNG).",
+        prompt_too_large: "El texto es demasiado largo. Pega solo la parte principal.",
+        invalid_json: "La respuesta llegó incompleta. Vuelve a intentarlo.",
+        refused: "Claude no ha querido analizar este contenido.",
+      }[e?.code] ?? "Algo falló al consultar a Claude. Vuelve a intentarlo.";
+      setStatus(msg, !!msg);
+      if (["not_granted", "sampling_disabled"].includes(e?.code)) $("#ask").hidden = true;
+    } finally {
+      $("#ask").disabled = false;
+      $("#stop").hidden = true;
+      ctl = null;
+    }
+  }
+
+  function setStatus(msg, err = false, busy = false) {
+    const s = $("#claude-status");
+    s.textContent = msg;
+    s.className = "status" + (err ? " err" : "") + (busy ? " dots" : "");
+  }
+
+  function renderClaude() {
+    const out = $("#claude-out"), pill = $("#claude-pill");
+    out.replaceChildren(); pill.replaceChildren();
+    const c = state.claude;
+    renderWatermark();
+    if (!c) { out.hidden = true; return; }
+    const [vt, vc] = VERDICTS[c.veredicto] || VERDICTS.no_concluyente;
+    const prob = Math.max(0, Math.min(100, Math.round(Number(c.probabilidad) || 0)));
+    const p = document.createElement("span"); p.className = "pill " + vc; p.textContent = vt;
+    pill.append(p);
+
+    const head = document.createElement("div"); head.className = "verdict";
+    const sc = document.createElement("div"); sc.className = "score"; sc.innerHTML = `${prob}<small>%</small>`;
+    const tx = document.createElement("div");
+    const t1 = document.createElement("p"); t1.className = "v-title"; t1.textContent = vt;
+    const t2 = document.createElement("p"); t2.className = "v-sub"; t2.textContent = "Probabilidad estimada por Claude de que sea texto generado con IA.";
+    tx.append(t1, t2); head.append(sc, tx);
+    out.append(head);
+
+    if (c.resumen) { const r = document.createElement("p"); r.style.margin = "0"; r.textContent = c.resumen; out.append(r); }
+    out.append(quoteList("Apunta a IA", c.indicios), quoteList("Apunta a una persona", c.contraindicios));
+    out.hidden = false;
+  }
+
+  function quoteList(title, items) {
+    const box = document.createElement("div");
+    if (!Array.isArray(items) || !items.length) return box;
+    box.style.display = "grid"; box.style.gap = "8px";
+    const h = document.createElement("h4"); h.textContent = title;
+    const ul = document.createElement("ul"); ul.className = "quotes";
+    for (const it of items.slice(0, 5)) {
+      const li = document.createElement("li");
+      if (it?.cita) { const q = document.createElement("q"); q.textContent = String(it.cita); li.append(q); }
+      const w = document.createElement("span"); w.className = "why"; w.textContent = String(it?.motivo || ""); li.append(w);
+      ul.append(li);
+    }
+    box.append(h, ul);
+    return box;
+  }
+
+  $("#ask").onclick = askClaude;
+  $("#stop").onclick = () => ctl?.abort();
+
+  // Arranque con el ejemplo cargado
+  setText(EXAMPLE, { example: true });
+})();
+</script>
+
+</body></html>
